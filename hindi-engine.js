@@ -5,16 +5,21 @@ window.loadHindiEngine = function(textAreaId) {
     let isHindiActive = true;
     let lastEngWord = "";
 
-    // 1. Suggestion Menu Create Karein
+    // Menu Create Karein (Cursor ke upar dikhne ke liye)
     let menu = document.getElementById('hindi-suggestions');
     if (!menu) {
         menu = document.createElement('div');
         menu.id = 'hindi-suggestions';
-        menu.style.cssText = "position:absolute; display:none; background:#fff; border:1px solid #ccc; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:10000; border-radius:8px; width:160px; overflow:hidden;";
+        menu.style.cssText = "position:fixed; display:none; background:#fff; border:1px solid #ccc; box-shadow:0 4px 12px rgba(0,0,0,0.2); z-index:10000; border-radius:8px; width:160px; max-height:200px; overflow-y:auto;";
         document.body.appendChild(menu);
     }
 
-    // 2. Transliteration Function
+    // Cursor position nikalne ka function
+    function getCursorXY(input) {
+        const { offsetLeft, offsetTop } = input;
+        return { x: offsetLeft, y: offsetTop };
+    }
+
     async function fetchHindi(word, callback) {
         try {
             const url = `https://inputtools.google.com/request?text=${encodeURIComponent(word)}&ime=transliteration_en_hi&num=5&cp=0&cs=1&ie=utf-8&oe=utf-8&app=jsapi`;
@@ -29,25 +34,27 @@ window.loadHindiEngine = function(textAreaId) {
         [...suggestions, eng].forEach(opt => {
             const div = document.createElement('div');
             div.innerText = opt;
-            div.style.cssText = "padding:10px; cursor:pointer; border-bottom:1px solid #eee; color:#333; font-family:sans-serif;";
+            div.style.cssText = "padding:10px; cursor:pointer; border-bottom:1px solid #eee; color:#333; font-family:sans-serif; background:#fff;";
             div.onclick = () => {
-                const words = area.value.trim().split(/\s+/);
-                words[words.length - 1] = opt;
-                area.value = words.join(" ") + " ";
+                const start = area.selectionStart;
+                const text = area.value;
+                const before = text.substring(0, text.lastIndexOf(' ', start - 1)).trim();
+                area.value = (before ? before + " " : "") + opt + " ";
                 menu.style.display = "none";
                 area.focus();
             };
             menu.appendChild(div);
         });
+
         const rect = area.getBoundingClientRect();
         menu.style.left = rect.left + "px";
-        menu.style.top = (rect.top + window.scrollY + 60) + "px";
+        menu.style.top = (rect.top + 100) + "px"; // Cursor ke paas adjust kiya
         menu.style.display = "block";
     }
 
     area.addEventListener('keydown', async function(e) {
-        // Ctrl + G Logic
-        if (e.ctrlKey && e.key === 'g') {
+        // Ctrl + H Toggle (Ab Ctrl+G Find nahi khulega)
+        if (e.ctrlKey && e.key === 'h') {
             e.preventDefault();
             isHindiActive = !isHindiActive;
             const status = document.getElementById('typing-status');
@@ -63,20 +70,22 @@ window.loadHindiEngine = function(textAreaId) {
         // Auto Purna Viram
         if (e.key === '.') {
             e.preventDefault();
-            area.setRangeText('।', area.selectionStart, area.selectionEnd, 'end');
+            window.insertAtCursor('।');
             return;
         }
 
         // Transliteration on Space
         if (e.code === 'Space') {
-            const words = area.value.trim().split(/\s+/);
+            const text = area.value.substring(0, area.selectionStart);
+            const words = text.trim().split(/\s+/);
             const word = words[words.length - 1];
+            
             if (word && /[a-zA-Z]/.test(word)) {
                 lastEngWord = word;
                 fetchHindi(word, (res) => {
-                    const txt = area.value;
-                    const lastIdx = txt.lastIndexOf(word);
-                    area.value = txt.substring(0, lastIdx) + res[0] + " ";
+                    const start = area.selectionStart;
+                    const lastIdx = area.value.lastIndexOf(word, start - 1);
+                    area.value = area.value.substring(0, lastIdx) + res[0] + " " + area.value.substring(start);
                 });
             }
         }
@@ -84,33 +93,31 @@ window.loadHindiEngine = function(textAreaId) {
         // Backspace Suggestions
         if (e.code === 'Backspace') {
             setTimeout(() => {
-                const words = area.value.trim().split(/\s+/);
+                const text = area.value.substring(0, area.selectionStart);
+                const words = text.trim().split(/\s+/);
                 const last = words[words.length - 1];
                 if (last && /[\u0900-\u097F]/.test(last)) {
                     fetchHindi(lastEngWord || last, (res) => showMenu(res, lastEngWord));
                 }
-            }, 10);
+            }, 50);
         }
     });
 
     document.addEventListener('click', (e) => { if(e.target !== area) menu.style.display="none"; });
 };
 
-// Global Helpers
-window.insertChar = function(char) {
-    const a = document.getElementById('hindiArea');
-    a.setRangeText(char, a.selectionStart, a.selectionEnd, 'end');
-    a.focus();
+// Cursor position par insert karne ka function
+window.insertAtCursor = function(char) {
+    const area = document.getElementById('hindiArea');
+    const start = area.selectionStart;
+    const end = area.selectionEnd;
+    const text = area.value;
+    area.value = text.substring(0, start) + char + text.substring(end);
+    area.selectionStart = area.selectionEnd = start + char.length;
+    area.focus();
 };
 
-window.searchDict = async function() {
-    const word = document.getElementById('dictInput').value;
-    const out = document.getElementById('dictOut');
-    if (!word) return;
-    out.innerText = "Searching...";
-    try {
-        const res = await fetch(`https://inputtools.google.com/request?text=${word}&ime=transliteration_en_hi&num=5`);
-        const data = await res.json();
-        if (data[0] === 'SUCCESS') out.innerHTML = "<b>Suggestions:</b> " + data[1][0][1].join(", ");
-    } catch (e) { out.innerText = "Error!"; }
+window.toggleEmoji = function() {
+    const box = document.getElementById('emoji-box');
+    box.style.display = box.style.display === 'none' ? 'grid' : 'none';
 };

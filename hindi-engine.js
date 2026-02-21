@@ -1,14 +1,12 @@
-/**
- * Professional Hindi Engine v4.0 - Fixed Version
- */
-async function loadHindiEngine(textAreaId) {
+// Hindi Engine v5.0 - Final Fix
+window.loadHindiEngine = function(textAreaId) {
     const area = document.getElementById(textAreaId);
     if (!area) return;
 
     let isHindiActive = true;
 
-    // Transliteration Logic
-    area.addEventListener('keydown', async (e) => {
+    // 1. Transliteration Logic
+    area.addEventListener('keydown', async function(e) {
         if (!isHindiActive) return;
         
         if (e.code === 'Space' || e.code === 'Enter') {
@@ -22,7 +20,8 @@ async function loadHindiEngine(textAreaId) {
 
             if (lastWord && lastWord.length > 0) {
                 try {
-                    const response = await fetch(`https://inputtools.google.com/request?text=${lastWord}&ime=transliteration_en_hi&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8&app=jsapi`);
+                    const url = `https://inputtools.google.com/request?text=${encodeURIComponent(lastWord)}&ime=transliteration_en_hi&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8&app=jsapi`;
+                    const response = await fetch(url);
                     const data = await response.json();
                     
                     if (data[0] === 'SUCCESS' && data[1][0][1].length > 0) {
@@ -36,13 +35,13 @@ async function loadHindiEngine(textAreaId) {
                         e.preventDefault();
                     }
                 } catch (err) {
-                    console.error("Transliteration Error:", err);
+                    console.error("API Fetch Error");
                 }
             }
         }
     });
 
-    // Ctrl + G Toggle Switch
+    // 2. Ctrl + G Toggle
     window.addEventListener('keydown', (e) => {
         if (e.ctrlKey && e.key === 'g') {
             e.preventDefault();
@@ -55,27 +54,32 @@ async function loadHindiEngine(textAreaId) {
         }
     });
 
-    // Voice Recognition
+    // 3. Voice Recognition Fix
     const micBtn = document.getElementById('micBtn');
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition && micBtn) {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'hi-IN';
-        recognition.onstart = () => { micBtn.innerHTML = "🛑 Listening..."; };
-        recognition.onresult = (event) => {
-            area.value += event.results[0][0].transcript + " ";
-        };
-        recognition.onend = () => { micBtn.innerHTML = "🎤 Speak Hindi"; };
-        micBtn.onclick = () => { recognition.start(); };
+    if (micBtn) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'hi-IN';
+            recognition.onstart = () => { micBtn.innerHTML = "🛑 Sun rha hu..."; micBtn.style.background = "#000"; };
+            recognition.onresult = (event) => {
+                area.value += event.results[0][0].transcript + " ";
+                document.getElementById('count').innerText = area.value.length;
+            };
+            recognition.onend = () => { micBtn.innerHTML = "🎤 Speak Hindi"; micBtn.style.background = "#ff3b30"; };
+            micBtn.onclick = () => { recognition.start(); };
+        } else {
+            micBtn.innerHTML = "Voice Not Supported";
+        }
     }
-}
+};
 
-// Dictionary Logic
-async function searchDict() {
+// Dictionary
+window.searchDict = async function() {
     const word = document.getElementById('dictInput').value;
     const out = document.getElementById('dictOut');
     if (!word) return;
-    out.innerText = "Searching...";
+    out.innerText = "Khoj rha hu...";
     try {
         const res = await fetch(`https://inputtools.google.com/request?text=${word}&ime=transliteration_en_hi&num=5`);
         const data = await res.json();
@@ -83,4 +87,4 @@ async function searchDict() {
             out.innerHTML = "<b>Sahi Shabd:</b> " + data[1][0][1].join(", ");
         }
     } catch (e) { out.innerText = "Error!"; }
-}
+};

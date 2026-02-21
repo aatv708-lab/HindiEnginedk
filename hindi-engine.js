@@ -1,5 +1,5 @@
 /**
- * Professional Hindi Engine v4.0 (Voice + Transliteration + Dark Mode Support)
+ * Professional Hindi Engine v4.0 - Fixed Version
  */
 async function loadHindiEngine(textAreaId) {
     const area = document.getElementById(textAreaId);
@@ -7,29 +7,37 @@ async function loadHindiEngine(textAreaId) {
 
     let isHindiActive = true;
 
-    // 1. Transliteration Logic (English to Hindi)
+    // Transliteration Logic
     area.addEventListener('keydown', async (e) => {
         if (!isHindiActive) return;
+        
         if (e.code === 'Space' || e.code === 'Enter') {
             const cursorPos = area.selectionStart;
-            const textBeforeCursor = area.value.substring(0, cursorPos);
-            const textAfterCursor = area.value.substring(cursorPos);
-            const words = textBeforeCursor.split(/\s+/);
+            const text = area.value;
+            const textBeforeCursor = text.substring(0, cursorPos);
+            const textAfterCursor = text.substring(cursorPos);
+            
+            const words = textBeforeCursor.trim().split(/\s+/);
             const lastWord = words[words.length - 1];
 
-            if (lastWord.length > 0) {
+            if (lastWord && lastWord.length > 0) {
                 try {
                     const response = await fetch(`https://inputtools.google.com/request?text=${lastWord}&ime=transliteration_en_hi&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8&app=jsapi`);
                     const data = await response.json();
-                    if (data[0] === 'SUCCESS') {
+                    
+                    if (data[0] === 'SUCCESS' && data[1][0][1].length > 0) {
                         const hindiWord = data[1][0][1][0];
-                        const newBeforeCursor = textBeforeCursor.substring(0, textBeforeCursor.lastIndexOf(lastWord)) + hindiWord;
-                        area.value = newBeforeCursor + (e.code === 'Space' ? ' ' : '\n') + textAfterCursor;
-                        const newPos = newBeforeCursor.length + 1;
+                        const lastIndex = textBeforeCursor.lastIndexOf(lastWord);
+                        const newBefore = textBeforeCursor.substring(0, lastIndex) + hindiWord;
+                        
+                        area.value = newBefore + (e.code === 'Space' ? ' ' : '\n') + textAfterCursor;
+                        const newPos = newBefore.length + 1;
                         area.setSelectionRange(newPos, newPos);
                         e.preventDefault();
                     }
-                } catch (err) { console.error("Service Error"); }
+                } catch (err) {
+                    console.error("Transliteration Error:", err);
+                }
             }
         }
     });
@@ -39,26 +47,30 @@ async function loadHindiEngine(textAreaId) {
         if (e.ctrlKey && e.key === 'g') {
             e.preventDefault();
             isHindiActive = !isHindiActive;
-            document.getElementById('typing-status').innerText = isHindiActive ? "Hindi Active" : "English Active";
-            document.getElementById('typing-status').style.color = isHindiActive ? "#34c759" : "#ff3b30";
+            const statusBox = document.getElementById('typing-status');
+            if(statusBox) {
+                statusBox.innerText = isHindiActive ? "Hindi Active" : "English Active";
+                statusBox.style.color = isHindiActive ? "#34c759" : "#ff3b30";
+            }
         }
     });
 
-    // 2. Voice Recognition Logic
+    // Voice Recognition
     const micBtn = document.getElementById('micBtn');
-    if ('webkitSpeechRecognition' in window) {
-        const recognition = new webkitSpeechRecognition();
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition && micBtn) {
+        const recognition = new SpeechRecognition();
         recognition.lang = 'hi-IN';
-        recognition.onstart = () => { micBtn.innerHTML = "🛑 Listening..."; micBtn.style.background = "#000"; };
+        recognition.onstart = () => { micBtn.innerHTML = "🛑 Listening..."; };
         recognition.onresult = (event) => {
             area.value += event.results[0][0].transcript + " ";
-            document.getElementById('count').innerText = area.value.length;
         };
-        recognition.onend = () => { micBtn.innerHTML = "🎤 Speak Hindi"; micBtn.style.background = "#ff3b30"; };
+        recognition.onend = () => { micBtn.innerHTML = "🎤 Speak Hindi"; };
         micBtn.onclick = () => { recognition.start(); };
-    } else { micBtn.style.display = 'none'; }
+    }
 }
 
+// Dictionary Logic
 async function searchDict() {
     const word = document.getElementById('dictInput').value;
     const out = document.getElementById('dictOut');
